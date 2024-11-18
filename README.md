@@ -23,7 +23,7 @@
 	```bash
 	pkg update -y && pkg upgrade -y
 	pkg install python git -y
- 	git clone https://github.com/seuusuario/nome-do-repositorio.git
-	cd nome-do-repositorio
+ 	git clone https://github.com/museu-do-novo/email-tools.git
+	cd email-tools
 	pip install -r requirements.txt
  	
