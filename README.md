@@ -26,4 +26,6 @@
  	git clone https://github.com/museu-do-novo/email-tools.git
 	cd email-tools
 	pip install -r requirements.txt
- 	
+# temp-mail-get-message.py
+	script simples para vizualizar as mensagens que chegam no seu email temporario
+ 
