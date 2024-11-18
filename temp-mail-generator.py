@@ -4,102 +4,148 @@ import random
 import re
 from faker import Faker
 from time import sleep
+import logging
 
+# Configurações
+MULTIPLE_ACCOUNTS = False  # True para criar múltiplos e-mails, False para apenas um
 
+# Configurar logs
+logging.basicConfig(
+    filename='automation.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Inicializa o gerador de dados falsos
 faker = Faker()
 
-def GenPas():
-    return ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=8))
+def generate_password(length=8):
+    """Gera uma senha alfanumérica aleatória."""
+    return ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=length))
 
-def GetNewEmail():
-    name = faker.first_name()
-    url = 'https://api.internal.temp-mail.io/api/v3/email/new'
-    data = {'name': name, 'domain': 'ehra.com'}
-    headers = {'User-Agent': 'Mozilla/5.0'}
+def create_temp_email():
+    """Cria um e-mail temporário usando a API temp-mail.io."""
+    name = faker.first_name()
+    url = 'https://api.internal.temp-mail.io/api/v3/email/new'
+    data = {'name': name, 'domain': 'ehra.com'}
+    headers = {'User-Agent': 'Mozilla/5.0'}
 
-    response = requests.post(url, json=data, headers=headers)
-    if response.status_code == 200:
-        req = response.json()
-        Email = req['email']
-        print(f"Your Email is {Email}")
-        return Email
-    else:
-        print(f"Failed to create account. Status code: {response.status_code}")
-        return None
+    try:
+        response = requests.post(url, json=data, headers=headers)
+        response.raise_for_status()
+        email = response.json().get('email')
+        logging.info(f"E-mail temporário criado: {email}")
+        print(f"Seu e-mail é: {email}")
+        return email
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erro ao criar e-mail: {e}")
+        print("Falha ao criar o e-mail.")
+        return None
 
-def GetMessage(email):
-    while True:
-        sleep(2)
-        url = f'https://api.internal.temp-mail.io/api/v3/email/{email}/messages'
-        response = requests.get(url)
-        if response.status_code == 200:
-            messages = response.json()
-            if messages:
-                for msg in messages:
-                    body_text = msg.get('body_text', '')
-                    subject = msg.get('subject', '')
-                    print(f"الموضوع: {subject}")
-                    match = re.search(r'\b\d{4}\b', body_text)
-                    if match:
-                        code = match.group(0)
-                        print(f"رمز التأكيد الخاص بك هو: {code}")
-                        return code
-            else:
-                print("لا توجد رسائل")
-        else:
-            print(f"Failed to get messages. Status code: {response.status_code}")
+def get_messages(email):
+    """Captura mensagens do e-mail temporário."""
+    url = f'https://api.internal.temp-mail.io/api/v3/email/{email}/messages'
+    while True:
+        sleep(5)
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            messages = response.json()
 
-def OTP(email, code):
-    url = "https://v1.prd.socket.araby.ai/otp/verify"
-    payload = json.dumps({
-        "otp": code,
-        "email": email,
-    })
-    headers = {
-        'User-Agent': "Dart/3.2 (dart:io)",
-        'Accept-Encoding': "gzip",
-        'Content-Type': "application/json",       
-    }
-    
-    response = requests.post(url, data=payload, headers=headers)
-    if "Authentication successful" in response.text:
-        token = response.json()["token"]
-        print(f"Authentication successful. Token: {token}")
-        with open("Ai Tokens.txt", "a") as f:
-         f.write(token +'\n')
-        return token
-    else:
-        print("Failed to verify OTP.")
-        return None
+            if messages:
+                for msg in messages:
+                    subject = msg.get('subject', 'Sem assunto')
+                    body_text = msg.get('body_text', '')
+                    print(f"Assunto: {subject}")
+                    match = re.search(r'\b\d{4}\b', body_text)
+                    if match:
+                        code = match.group(0)
+                        print(f"Seu código OTP é: {code}")
+                        logging.info(f"OTP recebido: {code}")
+                        return code
+            else:
+                print("Nenhuma mensagem encontrada.")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Erro ao capturar mensagens: {e}")
+            print("Falha ao buscar mensagens.")
 
-def Reg(email, password):
-    url = "https://v1.prd.socket.araby.ai/register"
-    payload = json.dumps({
-        "email": email,
-        "password": password,
-        "method": "OTP",
-        "is_mobile": True
-    })
-    headers = {
-        'User-Agent': "Dart/3.2 (dart:io)",
-        'Accept-Encoding': "gzip",
-        'Content-Type': "application/json"
-    }
+def verify_otp(email, code):
+    """Verifica o código OTP na API."""
+    url = "https://v1.prd.socket.araby.ai/otp/verify"
+    payload = {
+        "otp": code,
+        "email": email
+    }
+    headers = {
+        'User-Agent': "Dart/3.2 (dart:io)",
+        'Accept-Encoding': "gzip",
+        'Content-Type': "application/json"
+    }
 
-    response = requests.post(url, data=payload, headers=headers)
-    if "User registered successfully! Please verify your email." in response.text:
-        print("User registered successfully. Please verify your email.")
-        code = GetMessage(email)
-        if code:
-            return OTP(email, code)
-    else:
-        print("Failed to register user.")
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        if "Authentication successful" in response.text:
+            token = response.json().get("token")
+            logging.info(f"Autenticação bem-sucedida. Token: {token}")
+            print(f"Autenticação bem-sucedida. Token: {token}")
+            with open("Ai Tokens.txt", "a") as f:
+                f.write(token + '\n')
+            return token
+        else:
+            print("Falha ao verificar o código OTP.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erro na verificação do OTP: {e}")
+    return None
 
-while True:
-    email = GetNewEmail()
-    if email:
-        password = GenPas()
-        print(f"Generated password: {password}")
-        token = Reg(email, password)
-        if token:
-            print(f"Registration completed. Token: {token}")
+def register_account(email, password):
+    """Registra uma nova conta usando e-mail e senha."""
+    url = "https://v1.prd.socket.araby.ai/register"
+    payload = {
+        "email": email,
+        "password": password,
+        "method": "OTP",
+        "is_mobile": True
+    }
+    headers = {
+        'User-Agent': "Dart/3.2 (dart:io)",
+        'Accept-Encoding': "gzip",
+        'Content-Type': "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        if "User registered successfully! Please verify your email." in response.text:
+            print("Usuário registrado com sucesso. Verifique seu e-mail.")
+            code = get_messages(email)
+            if code:
+                return verify_otp(email, code)
+        else:
+            print("Falha ao registrar usuário.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erro no registro de conta: {e}")
+    return None
+
+def main():
+    """Função principal para criar contas."""
+    if MULTIPLE_ACCOUNTS:
+        while True:
+            email = create_temp_email()
+            if email:
+                password = generate_password()
+                print(f"Senha gerada: {password}")
+                token = register_account(email, password)
+                if token:
+                    print(f"Registro concluído. Token: {token}")
+    else:
+        email = create_temp_email()
+        if email:
+            password = generate_password()
+            print(f"Senha gerada: {password}")
+            token = register_account(email, password)
+            if token:
+                print(f"Registro concluído. Token: {token}")
+
+if __name__ == "__main__":
+    main()
