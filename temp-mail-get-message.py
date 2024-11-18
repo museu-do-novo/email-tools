@@ -1,26 +1,42 @@
-# Automação de Criação de Contas com E-mails Temporários
+import requests
+import re
 
-Este projeto em Python permite a criação de e-mails temporários, captura de mensagens para códigos OTP e registro automático de contas. Pode ser configurado para criar **uma única conta** ou **várias contas automaticamente**.
+def validate_email(email):
+    """Valida se o formato do e-mail é válido."""
+    email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return re.match(email_regex, email)
 
----
+def list_messages():
+    """Solicita o e-mail e lista todas as mensagens de um e-mail temporário."""
+    email = input("Digite o seu e-mail temporário: ")
+    
+    # Valida o formato do e-mail
+    if not validate_email(email):
+        print("E-mail inválido. Por favor, insira um e-mail válido.")
+        return
 
-## **Funcionalidades**
-- Gera e-mails temporários utilizando a API `temp-mail.io`.
-- Captura mensagens e extrai códigos OTP automaticamente.
-- Registra contas em uma plataforma com autenticação OTP.
-- Salva tokens gerados em um arquivo para uso futuro.
+    url = f'https://api.internal.temp-mail.io/api/v3/email/{email}/messages'
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Levanta exceções para códigos de status HTTP 4xx/5xx
+        
+        # Tenta converter a resposta em JSON
+        try:
+            messages = response.json()
+        except ValueError:
+            print("Resposta inválida. Não foi possível converter os dados para JSON.")
+            return
 
----
+        if messages:
+            for msg in messages:
+                print(f"Assunto: {msg.get('subject', 'Sem assunto')}")
+                print(f"Conteúdo: {msg.get('body_text', 'Sem conteúdo')}")
+                print("---")
+        else:
+            print("Nenhuma mensagem encontrada.")
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao listar mensagens: {e}")
 
-## **Instalação no Termux**
-
-Siga os passos abaixo para configurar e executar o projeto no Termux:
-
-### **1. Atualizar pacotes**
-Execute os seguintes comandos:
-```bash
-pkg update -y && pkg upgrade -y
-pkg install python git -y
-git clone https://github.com/museu-do-novo/email-tools.git
-cd email-tools
-pip install -r requirements.txt
+# Chama a função para listar as mensagens
+list_messages()
